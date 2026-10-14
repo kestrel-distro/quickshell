@@ -62,6 +62,10 @@ options=(!debug)
 
 : "${_kestrel_march:=x86-64-v3}"
 : "${_kestrel_lto:=thin}"
+# PGO: "no" (default), "generate" for the instrumented pass, or "use" for the
+# optimized pass against a profile directory. Two-stage; see packaging/PGO.md.
+: "${_kestrel_pgo:=no}"
+: "${_kestrel_pgo_dir:=/tmp/quickshell.profdata}"
 
 source=("quickshell::git+https://github.com/kestrel-distro/quickshell.git")
 sha256sums=('SKIP')
@@ -74,7 +78,24 @@ pkgver() {
 build() {
 	cd quickshell
 	# Clang's -mtune rejects x86-64-v3; -march alone targets the baseline.
-	local _flags="-march=${_kestrel_march}"
+	local _cflags="-march=${_kestrel_march}"
+	local _ldflags=""
+	if [[ "$_kestrel_lto" == "thin" ]]; then
+		_cflags+=" -flto=thin"
+		_ldflags+=" -flto=thin -fuse-ld=mold"
+	fi
+	case "$_kestrel_pgo" in
+		no) ;;
+		generate)
+			_cflags+=" -fprofile-generate=$_kestrel_pgo_dir"
+			_ldflags+=" -fprofile-generate=$_kestrel_pgo_dir"
+			;;
+		use)
+			_cflags+=" -fprofile-use=$_kestrel_pgo_dir -fprofile-correction"
+			_ldflags+=" -fprofile-use=$_kestrel_pgo_dir"
+			;;
+		*) error "invalid _kestrel_pgo: $_kestrel_pgo (no|generate|use)" ;;
+	esac
 	local _cmake=(
 		-G Ninja -B build -W no-dev
 		-DCMAKE_BUILD_TYPE=Release
@@ -88,14 +109,14 @@ build() {
 		-DSERVICE_GREETD=OFF
 		-DCMAKE_C_COMPILER=clang
 		-DCMAKE_CXX_COMPILER=clang++
+		-DCMAKE_C_FLAGS="$_cflags"
+		-DCMAKE_CXX_FLAGS="$_cflags"
+		-DCMAKE_EXE_LINKER_FLAGS="$_ldflags"
+		-DCMAKE_SHARED_LINKER_FLAGS="$_ldflags"
 	)
 	if [[ "$_kestrel_lto" == "thin" ]]; then
-		_flags+=" -flto=thin"
 		_cmake+=(-DCMAKE_AR=llvm-ar -DCMAKE_RANLIB=llvm-ranlib -DCMAKE_NM=llvm-nm)
-		_cmake+=(-DCMAKE_EXE_LINKER_FLAGS="-flto=thin -fuse-ld=mold")
-		_cmake+=(-DCMAKE_SHARED_LINKER_FLAGS="-flto=thin -fuse-ld=mold")
 	fi
-	_cmake+=(-DCMAKE_C_FLAGS="$_flags" -DCMAKE_CXX_FLAGS="$_flags")
 	cmake "${_cmake[@]}"
 	cmake --build build
 }

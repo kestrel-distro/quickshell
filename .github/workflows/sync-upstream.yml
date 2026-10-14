@@ -1,0 +1,52 @@
+name: sync-upstream
+
+# Merges upstream Quickshell into this fork and, when something changed, asks the
+# packages repository to rebuild. Set KESTREL_DISPATCH_TOKEN (a PAT with `repo`
+# scope on kestrel-distro/packages) for the dispatch to work; without it the
+# merge still runs and the daily publish picks the change up anyway.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          git config user.name "Kestrel packaging"
+          git config user.email "packaging@kestrel.org"
+          git remote add upstream https://github.com/quickshell-mirror/quickshell.git || true
+          git fetch --tags --quiet upstream
+          before="$(git rev-parse HEAD)"
+          git merge --no-edit upstream/master
+          after="$(git rev-parse HEAD)"
+          if [[ $before != $after ]]; then
+            git push origin HEAD
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Ask packages to rebuild
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.KESTREL_DISPATCH_TOKEN }}
+        run: |
+          if [[ -z ${GH_TOKEN:-} ]]; then
+            echo "KESTREL_DISPATCH_TOKEN not set; skipping dispatch"
+            exit 0
+          fi
+          gh api repos/kestrel-distro/packages/dispatches \
+            -f event_type=upstream-release \
+            -f 'client_payload[source]=quickshell'

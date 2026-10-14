@@ -1,0 +1,39 @@
+name: kestrel-build
+
+# Builds the Kestrel Quickshell package from this fork in a clean Arch container.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'packaging/**'
+      - '.github/workflows/kestrel-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare build environment
+        run: |
+          retry() { for i in 1 2 3 4 5; do "$@" && return 0; echo "retrying: $*"; sleep 15; done; return 1; }
+          retry pacman -Sy --noconfirm --needed archlinux-keyring
+          retry pacman -Su --noconfirm --needed base-devel git sudo
+          useradd -m builder
+          printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Build
+        working-directory: packaging/local
+        run: sudo -u builder makepkg -s -f --noconfirm --nocheck
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quickshell
+          if-no-files-found: error
+          path: packaging/local/*.pkg.tar.zst

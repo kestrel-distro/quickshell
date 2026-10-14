@@ -1,0 +1,104 @@
+# Maintainer: Kestrel <https://github.com/kestrel-distro>
+#
+# Lean Quickshell build for Kestrel, built from this fork's own tree. Clang,
+# ThinLTO, x86-64-v3, with the optional modules the Kestrel shell does not use
+# disabled.
+#
+# The package name matches Arch's on purpose, so a rolling `pacman -Syu` takes
+# over on the next upstream bump instead of orphaning the package. pkgrel sits
+# above Arch's current one (1 at time of writing) so this build wins inside the
+# ISO's build-time repository.
+#
+# Disabled modules are verified against kestrel/shell: the shell imports
+# Bluetooth, Networking, Mpris, Notifications, Pam, Pipewire, Polkit,
+# SystemTray, UPower, Hyprland, Wayland (SessionLock, ToplevelManager) and
+# Quickshell.Io. It does NOT use X11, I3, Screencopy or Greetd, so those are
+# off. Screenshots go through grim + slurp, not Quickshell screencopy.
+#
+# Build options:
+#   _kestrel_march   x86-64-v3 (default); x86-64-v4 or native to retarget
+#   _kestrel_lto     thin (default) | none
+
+pkgname=quickshell
+pkgver=0.3.2
+pkgrel=2
+pkgdesc='Flexible toolkit for making desktop shells with QtQuick'
+arch=(x86_64)
+url="https://git.outfoxxed.me/quickshell/quickshell"
+license=(LGPL-3.0-only)
+depends=(cpptrace libcpptrace.so
+         glibc # libc.so libm.so
+         hicolor-icon-theme
+         jemalloc libjemalloc.so
+         libdrm # libdrm.so
+         libgcc libgcc_s.so
+         libglvnd libEGL.so libOpenGL.so
+         libpipewire libpipewire-0.3.so
+         libstdc++ libstdc++.so
+         libxcb # libxcb.so
+         mesa # libgbm.so
+         pam libpam.so
+         polkit
+         qt6-base # libQt6Core.so libQt6DBus.so libQt6Gui.so libQt6Network.so libQt6Widgets.so
+         qt6-declarative # libQt6Qml.so libQt6Quick.so
+         qt6-svg
+         qt6-wayland # libQt6WaylandClient.so
+         wayland libwayland-client.so)
+makedepends=(cli11
+             clang
+             cmake
+             lld
+             llvm
+             mold
+             ninja
+             qt6-shadertools
+             spirv-tools
+             vulkan-headers
+             wayland-protocols)
+options=(!debug)
+
+: "${_kestrel_march:=x86-64-v3}"
+: "${_kestrel_lto:=thin}"
+
+source=("$pkgname::git+https://github.com/kestrel-distro/quickshell.git")
+sha256sums=('SKIP')
+
+pkgver() {
+	cd "$pkgname"
+	git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+build() {
+	cd "$pkgname"
+	# Clang's -mtune rejects x86-64-v3; -march alone targets the baseline.
+	local _flags="-march=${_kestrel_march}"
+	local _cmake=(
+		-G Ninja -B build -W no-dev
+		-DCMAKE_BUILD_TYPE=Release
+		-DCMAKE_INSTALL_PREFIX=/usr
+		-DINSTALL_QML_PREFIX=lib/qt6/qml
+		-DDISTRIBUTOR=Kestrel
+		-DCRASH_HANDLER=OFF
+		-DX11=OFF
+		-DI3=OFF
+		-DSCREENCOPY=OFF
+		-DSERVICE_GREETD=OFF
+		-DCMAKE_C_COMPILER=clang
+		-DCMAKE_CXX_COMPILER=clang++
+	)
+	if [[ "$_kestrel_lto" == "thin" ]]; then
+		_flags+=" -flto=thin"
+		_cmake+=(-DCMAKE_AR=llvm-ar -DCMAKE_RANLIB=llvm-ranlib -DCMAKE_NM=llvm-nm)
+		_cmake+=(-DCMAKE_EXE_LINKER_FLAGS="-flto=thin -fuse-ld=mold")
+		_cmake+=(-DCMAKE_SHARED_LINKER_FLAGS="-flto=thin -fuse-ld=mold")
+	fi
+	_cmake+=(-DCMAKE_C_FLAGS="$_flags" -DCMAKE_CXX_FLAGS="$_flags")
+	cmake "${_cmake[@]}"
+	cmake --build build
+}
+
+package() {
+	cd "$pkgname"
+	DESTDIR="$pkgdir" cmake --install build
+	install -Dm0644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

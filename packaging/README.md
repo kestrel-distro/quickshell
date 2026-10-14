@@ -29,9 +29,10 @@ cd packaging/local
 makepkg -s -f --noconfirm --nocheck
 ```
 
-Packages are named `quickshell` to match Arch, with `pkgrel` above Arch's so the
-build wins in the ISO build-time repository; a later Arch bump takes over on
-`pacman -Syu`.
+The package is named `quickshell-kestrel`, and conflicts with/replaces/provides
+`quickshell`, so Arch's stock package can never install or overwrite it; updates
+come only from the Kestrel `[kestrel]` repository. The installed binary and
+library are unchanged.
 
 | Variable | Default | Meaning |
 |---|---|---|

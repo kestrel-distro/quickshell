@@ -4,10 +4,10 @@
 # ThinLTO, x86-64-v3, with the optional modules the Kestrel shell does not use
 # disabled.
 #
-# The package name matches Arch's on purpose, so a rolling `pacman -Syu` takes
-# over on the next upstream bump instead of orphaning the package. pkgrel sits
-# above Arch's current one (1 at time of writing) so this build wins inside the
-# ISO's build-time repository.
+# The package is named quickshell-kestrel and conflicts/replaces/provides the
+# Arch package, so Arch's stock quickshell can never install or overwrite it.
+# Updates come only from the Kestrel [kestrel] repository. The installed binary
+# and library are unchanged.
 #
 # Disabled modules are verified against kestrel/shell: the shell imports
 # Bluetooth, Networking, Mpris, Notifications, Pam, Pipewire, Polkit,
@@ -19,9 +19,9 @@
 #   _kestrel_march   x86-64-v3 (default); x86-64-v4 or native to retarget
 #   _kestrel_lto     thin (default) | none
 
-pkgname=quickshell
+pkgname=quickshell-kestrel
 pkgver=0.3.2
-pkgrel=2
+pkgrel=1
 pkgdesc='Flexible toolkit for making desktop shells with QtQuick'
 arch=(x86_64)
 url="https://git.outfoxxed.me/quickshell/quickshell"
@@ -55,21 +55,24 @@ makedepends=(cli11
              spirv-tools
              vulkan-headers
              wayland-protocols)
+provides=(quickshell)
+conflicts=(quickshell)
+replaces=(quickshell)
 options=(!debug)
 
 : "${_kestrel_march:=x86-64-v3}"
 : "${_kestrel_lto:=thin}"
 
-source=("$pkgname::git+https://github.com/kestrel-distro/quickshell.git")
+source=("quickshell::git+https://github.com/kestrel-distro/quickshell.git")
 sha256sums=('SKIP')
 
 pkgver() {
-	cd "$pkgname"
+	cd quickshell
 	git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
 build() {
-	cd "$pkgname"
+	cd quickshell
 	# Clang's -mtune rejects x86-64-v3; -march alone targets the baseline.
 	local _flags="-march=${_kestrel_march}"
 	local _cmake=(
@@ -98,7 +101,7 @@ build() {
 }
 
 package() {
-	cd "$pkgname"
+	cd quickshell
 	DESTDIR="$pkgdir" cmake --install build
 	install -Dm0644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
 }

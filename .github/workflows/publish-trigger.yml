@@ -1,0 +1,33 @@
+name: publish-trigger
+
+# Notifies kestrel-distro/packages to run a fast desktop-only publish
+# (repository_dispatch type=desktop-release, which skips the ~4 h kernel
+# build) whenever this repo's packaging changes land on the default branch.
+
+on:
+  push:
+    branches: [main, master]
+    # No paths filter: packaging/local builds from this repo's own HEAD, so
+    # any push changes the resulting package.
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    # Skip silently when the PAT secret is not configured, so forks and
+    # local pushes don't fail.
+    steps:
+      - name: Send desktop-release dispatch
+        env:
+          TOKEN: ${{ secrets.KESTREL_TRIGGER_TOKEN }}
+        run: |
+          if [[ -z "$TOKEN" ]]; then
+            echo "KESTREL_TRIGGER_TOKEN not set; skipping publish trigger"
+            exit 0
+          fi
+          curl -fsSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/kestrel-distro/packages/dispatches \
+            -d '{"event_type":"desktop-release","client_payload":{"source":"'"$GITHUB_REPOSITORY"'"}}'
+          echo "desktop-release dispatch sent"

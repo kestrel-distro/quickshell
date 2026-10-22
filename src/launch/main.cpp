@@ -13,6 +13,7 @@
 #include "../core/instanceinfo.hpp"
 #include "../core/logging.hpp"
 #include "../core/paths.hpp"
+#include "../kestrel/KestrelHint.hpp"
 #include "build.hpp"
 #include "launch_p.hpp"
 
@@ -118,6 +119,9 @@ void exitDaemon(int code) {
 
 int main(int argc, char** argv) {
 	QCoreApplication::setApplicationName("quickshell");
+
+	// Tell scx_kestrel this is the shell (hint 1). A no-op on a stock kernel.
+	KestrelHint::setProcess(1);
 
 #if CRASH_HANDLER
 	qsCheckCrash(argc, argv);

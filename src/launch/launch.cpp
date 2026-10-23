@@ -25,6 +25,7 @@
 #include "../core/qmlglobal.hpp"
 #include "../core/rootwrapper.hpp"
 #include "../ipc/ipc.hpp"
+#include "../kestrel/RenderHint.hpp"
 #include "build.hpp"
 #include "launch_p.hpp"
 
@@ -307,6 +308,8 @@ int launch(const LaunchArgs& args, char** argv) {
 
 	// Base window transparency appears to be additive.
 	// Use a fully transparent window with a colored rect.
+	KestrelRenderHint::install(app);
+
 	QQuickWindow::setDefaultAlphaBuffer(true);
 
 	if (pragmas.nativeTextRendering) {
